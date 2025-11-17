@@ -1,0 +1,10 @@
+version: '3'
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        REACT_APP_COURSE_TRACKER_API_URL: "http://localhost:8080/course-tracker-api"
+    ports:
+      - "3000:80"
