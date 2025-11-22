@@ -8,7 +8,7 @@ const appendQueryParams = (url, queryParams) => {
     return `${url}?${queryString}`;
 };
 
-const apiUrl = process.env.REACT_APP_COURSE_TRACKER_API_URL;
+const apiUrl = "http://localhost:8080/course-tracker-api";//process.env.REACT_APP_COURSE_TRACKER_API_URL;
 
 const useFetch = (url, method, autoFetch = false) => {
     const [data, setData] = useState(null);
@@ -24,7 +24,7 @@ const useFetch = (url, method, autoFetch = false) => {
     }, [autoFetch, method, url]);
 
     const fetchData = useCallback(
-        async (body, queryParams, skipRefresh = false) => {
+        async (body, queryParams) => {
             const finalUrl = appendQueryParams(url, queryParams);
 
             const config = { 

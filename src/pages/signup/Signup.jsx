@@ -6,6 +6,7 @@ import { yupResolver } from "@hookform/resolvers/yup";
 import { colors } from "../../theme/colors";
 import useFetch from "../hooks/useFetch";
 import Loader from "../../components/Loader";
+import { useNavigate } from "react-router-dom";
 
 const schema = yup.object({
   firstname: yup.string().required("First name required"),
@@ -17,6 +18,7 @@ const schema = yup.object({
 
 const Signup = () => {
 
+  const navigate = useNavigate();
   const {
     handleSubmit,
     control,
@@ -200,6 +202,7 @@ const Signup = () => {
                 fontWeight: 600,
                 fontSize: "0.95rem"
               }}
+              onClick={()=>{navigate("/login")}}
             >
               Already have an account
             </Button>
