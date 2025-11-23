@@ -156,6 +156,7 @@ const Login = () => {
                 fontWeight: 600,
                 fontSize: "0.95rem"
               }}
+              onClick={()=>{navigate("/signup")}}
             >
               Create Account
             </Button>

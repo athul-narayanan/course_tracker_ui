@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useEffect} from "react";
 import { useForm, Controller } from "react-hook-form";
 import { TextField, Button } from "@mui/material";
 import * as yup from "yup";
@@ -18,6 +18,14 @@ const schema = yup.object({
 
 const Signup = () => {
 
+   const { data, error, loading, fetchData } = useFetch("/user/signup", "POST", false);
+
+  useEffect(() => {
+      if (data?.user) {
+        navigate("/login");
+      }
+  }, [data])
+
   const navigate = useNavigate();
   const {
     handleSubmit,
@@ -27,7 +35,7 @@ const Signup = () => {
     resolver: yupResolver(schema)
   });
 
-  const { data, error, loading, fetchData } = useFetch("/user/signup", "POST", false);
+ 
 
   const onSubmit = (form) => {
 

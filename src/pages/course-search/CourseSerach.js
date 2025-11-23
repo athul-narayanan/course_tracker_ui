@@ -1,56 +1,66 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { TextField, Button, MenuItem, CircularProgress } from "@mui/material";
 import Autocomplete from "@mui/material/Autocomplete";
 import { useNavigate } from "react-router-dom";
 import { colors } from "../../theme/colors";
 import AppLayout from "../../components/Layout";
-
-const universities = [
-  { id: "u1", name: "Algoma University" },
-  { id: "u2", name: "University of Toronto" },
-  { id: "u3", name: "University of Waterloo" },
-];
-
-const fields = [
-  { id: "f1", name: "Computer Science & IT" },
-  { id: "f2", name: "Business & Management" },
-  { id: "f3", name: "Life Sciences" },
-  { id: "f4", name: "Psychology & Social Science" },
-];
-
-const specializations = [
-  { id: "s1", fieldId: "f1", name: "Software Engineering" },
-  { id: "s2", fieldId: "f1", name: "Data Science" },
-  { id: "s3", fieldId: "f2", name: "MBA" },
-  { id: "s4", fieldId: "f2", name: "Finance" },
-  { id: "s5", fieldId: "f3", name: "Biology" },
-  { id: "s6", fieldId: "f4", name: "Clinical Psychology" },
-];
+import useFetch from "../hooks/useFetch";
+import { useSelector, useDispatch } from "react-redux";
+import {
+  setUniversities,
+  setFields,
+  setSpecializations,
+} from "../../store/auth/lookupsSlice";
+import { setFilters } from "../../store/auth/filterSlice";
 
 export default function CourseSearch() {
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
-  const [filters, setFilters] = useState({
-    universityId: "",
-    fieldId: "",
-    specializationId: "",
-    level: "",
-    duration: "",
-  });
+  const filters = useSelector((state) => state.filters);
+  const lookups = useSelector((state) => state.lookups);
 
-  const [loading, setLoading] = useState(false);
+  const levels = ["Bachelors", "Masters"];
+  const durations = ["1 Year", "2 Years", "3 Years"];
 
-  const visibleSpecializations = filters.fieldId
-    ? specializations.filter(s => s.fieldId === filters.fieldId)
-    : specializations;
+  const { data: uniData, loading: uniLoading, fetchData: loadUniversities } = useFetch("/universities", "GET");
+  const { data: fieldData, loading: fieldLoading, fetchData: loadFields } = useFetch("/fields", "GET");
+  const { data: specData, loading: specLoading, fetchData: loadSpecializations } = useFetch("/specializations", "GET");
 
-  const onSearch = () => {
-    navigate("/courses", { state: { filters } });
-  };
+  useEffect(() => {
+    if (!lookups.universities.length) loadUniversities();
+    if (!lookups.fields.length) loadFields();
+  }, []);
 
-  const onSubscribe = () => {
-    navigate("/courses", { state: { filters, subscribe: true } });
-  };
+  useEffect(() => {
+    if (uniData?.data) dispatch(setUniversities(uniData.data));
+  }, [uniData]);
+
+  useEffect(() => {
+    if (fieldData?.data) dispatch(setFields(fieldData.data));
+  }, [fieldData]);
+
+  useEffect(() => {
+    if (filters.fieldId) {
+      if (!lookups.specializations[filters.fieldId])
+        loadSpecializations(null, { fieldId: filters.fieldId });
+    }
+  }, [filters.fieldId]);
+
+  useEffect(() => {
+    if (specData?.data && filters.fieldId) {
+      dispatch(
+        setSpecializations({
+          fieldId: filters.fieldId,
+          list: specData.data,
+        })
+      );
+    }
+  }, [specData]);
+
+  const updateFilters = (updated) => dispatch(setFilters({ ...filters, ...updated }));
+  const onSearch = () => navigate("/courses", { state: { filters } });
+  const onSubscribe = () => navigate("/courses", { state: { filters, subscribe: true } });
 
   return (
     <AppLayout>
@@ -94,50 +104,92 @@ export default function CourseSearch() {
             marginBottom: "1.5rem",
           }}
         >
-
           <Autocomplete
-            options={universities}
+            options={lookups.universities}
+            loading={uniLoading}
             getOptionLabel={(o) => o.name}
-            onChange={(e, v) =>
-              setFilters({ ...filters, universityId: v ? v.id : "" })
-            }
+            onChange={(e, v) => updateFilters({ universityId: v ? v.id : "" })}
+            value={lookups.universities.find((u) => u.id === filters.universityId) || null}
             renderInput={(params) => (
-              <TextField {...params} label="University" placeholder="Search..." />
+              <TextField
+                {...params}
+                label="University"
+                placeholder="Search..."
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {uniLoading ? <CircularProgress size={16} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
             )}
           />
 
           <Autocomplete
-            options={fields}
+            options={lookups.fields}
+            loading={fieldLoading}
             getOptionLabel={(o) => o.name}
             onChange={(e, v) =>
-              setFilters({
-                ...filters,
-                fieldId: v ? v.id : "",
+              updateFilters({
+                fieldId: v ? Number(v.id) : null,
                 specializationId: "",
               })
             }
+            value={lookups.fields.find((f) => f.id === filters.fieldId) || null}
             renderInput={(params) => (
-              <TextField {...params} label="Field of Study" placeholder="Search..." />
+              <TextField
+                {...params}
+                label="Field of Study"
+                placeholder="Search..."
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {fieldLoading ? <CircularProgress size={16} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
             )}
           />
 
           <Autocomplete
-            options={visibleSpecializations}
+            options={lookups.specializations[filters.fieldId] || []}
+            loading={specLoading}
             getOptionLabel={(o) => o.name}
-            onChange={(e, v) =>
-              setFilters({ ...filters, specializationId: v ? v.id : "" })
+            onChange={(e, v) => updateFilters({ specializationId: v ? v.id : "" })}
+            value={
+              (lookups.specializations[filters.fieldId] || []).find(
+                (s) => s.id === filters.specializationId
+              ) || null
             }
             renderInput={(params) => (
-              <TextField {...params} label="Specialization" placeholder="Search..." />
+              <TextField
+                {...params}
+                label="Specialization"
+                placeholder="Search..."
+                InputProps={{
+                  ...params.InputProps,
+                  endAdornment: (
+                    <>
+                      {specLoading ? <CircularProgress size={16} /> : null}
+                      {params.InputProps.endAdornment}
+                    </>
+                  ),
+                }}
+              />
             )}
           />
 
           <Autocomplete
-            options={["Bachelors", "Masters"]}
-            onChange={(e, v) => setFilters({ ...filters, level: v || "" })}
-            renderInput={(params) => (
-              <TextField {...params} label="Level" placeholder="Type..." />
-            )}
+            options={levels}
+            value={filters.level || null}
+            onChange={(e, v) => updateFilters({ level: v || "" })}
+            renderInput={(params) => <TextField {...params} label="Level" />}
           />
 
           <TextField
@@ -145,14 +197,13 @@ export default function CourseSearch() {
             select
             fullWidth
             value={filters.duration}
-            onChange={(e) => setFilters({ ...filters, duration: e.target.value })}
+            onChange={(e) => updateFilters({ duration: e.target.value })}
           >
             <MenuItem value="">Any</MenuItem>
-            <MenuItem value="1 Year">1 Year</MenuItem>
-            <MenuItem value="2 Years">2 Years</MenuItem>
-            <MenuItem value="3 Years">3 Years</MenuItem>
+            {durations.map((d) => (
+              <MenuItem key={d} value={d}>{d}</MenuItem>
+            ))}
           </TextField>
-
         </div>
 
         <div style={{ display: "flex", gap: "1rem" }}>

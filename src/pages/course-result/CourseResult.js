@@ -1,142 +1,144 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { TextField, MenuItem, Button } from "@mui/material";
-import { useLocation, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { TextField, MenuItem, Button, CircularProgress } from "@mui/material";
+import { useLocation, Link, useNavigate } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import AppLayout from "../../components/Layout";
 import { colors } from "../../theme/colors";
+import { useSelector, useDispatch } from "react-redux";
+import { setFilters } from "../../store/auth/filterSlice";
+import { setUniversities, setFields, setSpecializations } from "../../store/auth/lookupsSlice";
+import useFetch from "../hooks/useFetch";
 
 const HEADER_HEIGHT = 64;
-const FILTER_HEIGHT = 120;
-
-const universities = [
-  { id: "u1", name: "Algoma University" },
-  { id: "u2", name: "University of Toronto" },
-  { id: "u3", name: "University of Waterloo" },
-];
-
-const fields = [
-  { id: "f1", name: "Computer Science & IT" },
-  { id: "f2", name: "Business & Management" },
-  { id: "f3", name: "Life Sciences" },
-  { id: "f4", name: "Psychology & Social Science" },
-];
-
-const specializations = [
-  { id: "s1", fieldId: "f1", name: "Software Engineering" },
-  { id: "s2", fieldId: "f1", name: "Data Science" },
-  { id: "s3", fieldId: "f2", name: "MBA" },
-  { id: "s4", fieldId: "f2", name: "Finance" },
-  { id: "s5", fieldId: "f3", name: "Biology" },
-  { id: "s6", fieldId: "f4", name: "Clinical Psychology" },
-];
-
-const allCourses = [
-  {
-    id: "c1",
-    name: "BSc Computer Science",
-    universityId: "u1",
-    fieldId: "f1",
-    specializationId: "s1",
-    level: "Bachelors",
-    duration: "3 Years",
-  },
-  {
-    id: "c2",
-    name: "MBA Business Management",
-    universityId: "u2",
-    fieldId: "f2",
-    specializationId: "s3",
-    level: "Masters",
-    duration: "2 Years",
-  },
-  {
-    id: "c3",
-    name: "MSc Data Science",
-    universityId: "u3",
-    fieldId: "f1",
-    specializationId: "s2",
-    level: "Masters",
-    duration: "2 Years",
-  },
-  {
-    id: "c4",
-    name: "BSc Biology",
-    universityId: "u1",
-    fieldId: "f3",
-    specializationId: "s5",
-    level: "Bachelors",
-    duration: "3 Years",
-  },
-  {
-    id: "c5",
-    name: "BA Clinical Psychology",
-    universityId: "u1",
-    fieldId: "f4",
-    specializationId: "s6",
-    level: "Bachelors",
-    duration: "3 Years",
-  },
-];
+const FILTER_HEIGHT = 130;
 
 const menuProps = {
   disablePortal: false,
   disableScrollLock: true,
   container: () => document.body,
-  PaperProps: {
-    elevation: 6,
-    style: { zIndex: 9999 },
-  },
+  PaperProps: { elevation: 6, style: { zIndex: 9999 } },
 };
 
 export default function CourseResults() {
   const location = useLocation();
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const user = useSelector((state) => state?.auth?.user);
 
-  const initialFilters = location.state?.filters || {
-    universityId: "",
-    fieldId: "",
-    specializationId: "",
-    level: "",
-    duration: "",
-  };
-
+  const lookups = useSelector((state) => state.lookups);
+  const savedFilters = useSelector((state) => state.filters);
+  const initialFilters = location.state?.filters || savedFilters;
   const subscribeRequested = location.state?.subscribe || false;
 
-  const [filters, setFilters] = useState(initialFilters);
-  const [results, setResults] = useState([]);
+  const [filters, setFiltersLocal] = useState(initialFilters);
+  const [courses, setCourses] = useState([]);
+  const [page, setPage] = useState(1);
 
-  const visibleSpecializations = filters.fieldId
-    ? specializations.filter((s) => s.fieldId === filters.fieldId)
-    : specializations;
+  const { data, loading, fetchData } = useFetch("/universities/search", "GET");
+  const { data: uniData, fetchData: loadUniversities } = useFetch("/universities", "GET");
+  const { data: fieldData, fetchData: loadFields } = useFetch("/fields", "GET");
+  const { data: specData, fetchData: loadSpecializations } = useFetch("/specializations", "GET");
+  const { fetchData: saveSub } = useFetch("/subscription", "POST", false);
 
-  const applyFilter = useMemo(
-    () => () => {
-      let f = allCourses;
-      if (filters.universityId)
-        f = f.filter((c) => c.universityId === filters.universityId);
-      if (filters.fieldId) f = f.filter((c) => c.fieldId === filters.fieldId);
-      if (filters.specializationId)
-        f = f.filter((c) => c.specializationId === filters.specializationId);
-      if (filters.level) f = f.filter((c) => c.level === filters.level);
-      if (filters.duration)
-        f = f.filter((c) => c.duration === filters.duration);
-      setResults(f);
-    },
-    [filters]
-  );
+  const cleanNull = (obj) => {
+    const cleaned = { ...obj };
+    Object.keys(cleaned).forEach((key) => {
+      if (cleaned[key] === "" || cleaned[key] === undefined) cleaned[key] = null;
+    });
+    return cleaned;
+  };
+
+  const subscribeApi = (body) => {
+    if (!user?.email) return toast.error("Login required to subscribe");
+    saveSub(cleanNull(body));
+    toast.success("Subscribed for updates.");
+  };
+
+  const fetchCourses = (f = filters, p = 1) => {
+    const params = {};
+    if (f.universityId) params.universityId = f.universityId;
+    if (f.fieldId) params.fieldId = f.fieldId;
+    if (f.specializationId) params.specializationId = f.specializationId;
+    if (f.level) params.level = f.level;
+    if (f.duration) params.duration = f.duration;
+    params.page = p;
+    params.limit = 8;
+    fetchData(null, params);
+  };
 
   useEffect(() => {
-    applyFilter();
-  }, [applyFilter]);
+    if (!lookups.universities.length) loadUniversities();
+    if (!lookups.fields.length) loadFields();
+    fetchCourses(initialFilters, 1);
+  }, []);
 
   useEffect(() => {
-    if (subscribeRequested) {
-      toast.success("Subscription preferences saved.");
+    if (uniData?.data) dispatch(setUniversities(uniData.data));
+  }, [uniData, dispatch]);
+
+  useEffect(() => {
+    if (fieldData?.data) dispatch(setFields(fieldData.data));
+  }, [fieldData, dispatch]);
+
+  useEffect(() => {
+    if (filters.fieldId) loadSpecializations(null, { fieldId: filters.fieldId });
+  }, [filters.fieldId]);
+
+  useEffect(() => {
+    if (specData?.data && filters.fieldId) {
+      dispatch(
+        setSpecializations({
+          fieldId: filters.fieldId,
+          list: specData.data,
+        })
+      );
     }
+  }, [specData, filters.fieldId, dispatch]);
+
+  useEffect(() => {
+    if (!data) return;
+    if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+      setCourses([]);
+      return;
+    }
+    if (page === 1) setCourses(data.data);
+    else setCourses((prev) => [...prev, ...data.data]);
+  }, [data, page]);
+
+  useEffect(() => {
+    if (subscribeRequested) toast.success("Subscription preferences saved.");
   }, [subscribeRequested]);
 
-  const onSubscribe = () => {
-    toast.success("Subscription updated for these filters.");
+  const updateFilterEverywhere = (obj) => {
+    const newFilters = { ...filters, ...obj };
+    setFiltersLocal(newFilters);
+    dispatch(setFilters(newFilters));
+    setPage(1);
+    fetchCourses(newFilters, 1);
   };
+
+  const onSubscribeMain = () =>
+    subscribeApi(
+      cleanNull({
+        userEmail: user?.email,
+        universityId: filters.universityId,
+        fieldId: filters.fieldId,
+        specializationId: filters.specializationId,
+        level: filters.level,
+        duration: filters.duration,
+      })
+    );
+
+  const visibleSpecializations = filters.fieldId
+    ? lookups.specializations?.[filters.fieldId] || []
+    : [];
+  const levels = ["Bachelors", "Masters", "PG Diploma"];
+  const durations = ["1 Year", "16 Months", "20 Months", "2 Years", "3 Years", "4 Years"];
+
+  const topPadding =
+    window.innerWidth <= 768
+      ? HEADER_HEIGHT + FILTER_HEIGHT + 30
+      : HEADER_HEIGHT / 2 + FILTER_HEIGHT;
 
   return (
     <AppLayout>
@@ -146,40 +148,39 @@ export default function CourseResults() {
           top: HEADER_HEIGHT,
           left: 0,
           right: 0,
-          zIndex: 1200,
-          background: "#f5f6fa",
-          padding: "0.35rem 0 0.55rem 0",
-          boxShadow: "0 4px 10px rgba(15,23,42,0.08)",
+          zIndex: 1000,
+          background: "linear-gradient(90deg,#4e6dfb,#63b5ff)",
+          padding: "0.9rem 1rem 1rem 1rem",
+          boxShadow: "0 4px 10px rgba(0,0,0,0.12)",
           display: "flex",
           justifyContent: "center",
         }}
       >
         <div
           style={{
-            width: "min(1180px, 100% - 2rem)",
-            background: "linear-gradient(90deg,#4e6dfb,#63b5ff)",
-            padding: "0.65rem 1.3rem 0.8rem 1.3rem",
-            borderRadius: "14px",
-            boxShadow: "0 4px 10px rgba(15,23,42,0.25)",
+            width: "min(1400px, 100% - 2rem)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "0.75rem",
+            color: "white",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "0.35rem",
-            }}
-          >
-            <span
-              style={{
-                color: "#fff",
-                fontSize: "1.15rem",
-                fontWeight: 700,
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            <span style={{ fontSize: "1.2rem", fontWeight: 700 }}>Search Filters</span>
+            <Button
+              onClick={onSubscribeMain}
+              sx={{
+                color: "white",
+                border: "1px solid rgba(255,255,255,0.7)",
+                textTransform: "none",
+                fontWeight: 500,
+                fontSize: "0.85rem",
+                borderRadius: "999px",
+                padding: "0.15rem 0.9rem",
               }}
             >
-              Search Filters
-            </span>
-
+              Subscribe
+            </Button>
             <Button
               component={Link}
               to="/"
@@ -190,8 +191,6 @@ export default function CourseResults() {
                 fontWeight: 500,
                 fontSize: "0.85rem",
                 textDecoration: "underline",
-                padding: 0,
-                minWidth: 0,
               }}
             >
               Back to main search
@@ -201,9 +200,8 @@ export default function CourseResults() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(5, minmax(0,1fr))",
-              gap: "0.6rem",
-              alignItems: "center",
+              gridTemplateColumns: "repeat(5,1fr)",
+              gap: "0.7rem",
             }}
           >
             <TextField
@@ -211,15 +209,13 @@ export default function CourseResults() {
               select
               size="small"
               variant="filled"
-              value={filters.universityId}
-              onChange={(e) =>
-                setFilters({ ...filters, universityId: e.target.value })
-              }
+              value={filters.universityId || ""}
+              onChange={(e) => updateFilterEverywhere({ universityId: e.target.value || "" })}
               sx={{ background: "white", borderRadius: "6px" }}
               SelectProps={{ MenuProps: menuProps }}
             >
               <MenuItem value="">Any</MenuItem>
-              {universities.map((u) => (
+              {lookups.universities.map((u) => (
                 <MenuItem key={u.id} value={u.id}>
                   {u.name}
                 </MenuItem>
@@ -231,11 +227,10 @@ export default function CourseResults() {
               select
               size="small"
               variant="filled"
-              value={filters.fieldId}
+              value={filters.fieldId || ""}
               onChange={(e) =>
-                setFilters({
-                  ...filters,
-                  fieldId: e.target.value,
+                updateFilterEverywhere({
+                  fieldId: e.target.value || "",
                   specializationId: "",
                 })
               }
@@ -243,7 +238,7 @@ export default function CourseResults() {
               SelectProps={{ MenuProps: menuProps }}
             >
               <MenuItem value="">Any</MenuItem>
-              {fields.map((f) => (
+              {lookups.fields.map((f) => (
                 <MenuItem key={f.id} value={f.id}>
                   {f.name}
                 </MenuItem>
@@ -255,10 +250,8 @@ export default function CourseResults() {
               select
               size="small"
               variant="filled"
-              value={filters.specializationId}
-              onChange={(e) =>
-                setFilters({ ...filters, specializationId: e.target.value })
-              }
+              value={filters.specializationId || ""}
+              onChange={(e) => updateFilterEverywhere({ specializationId: e.target.value || "" })}
               sx={{ background: "white", borderRadius: "6px" }}
               SelectProps={{ MenuProps: menuProps }}
             >
@@ -275,16 +268,17 @@ export default function CourseResults() {
               select
               size="small"
               variant="filled"
-              value={filters.level}
-              onChange={(e) =>
-                setFilters({ ...filters, level: e.target.value })
-              }
+              value={filters.level || ""}
+              onChange={(e) => updateFilterEverywhere({ level: e.target.value || "" })}
               sx={{ background: "white", borderRadius: "6px" }}
               SelectProps={{ MenuProps: menuProps }}
             >
               <MenuItem value="">Any</MenuItem>
-              <MenuItem value="Bachelors">Bachelors</MenuItem>
-              <MenuItem value="Masters">Masters</MenuItem>
+              {levels.map((l) => (
+                <MenuItem key={l} value={l}>
+                  {l}
+                </MenuItem>
+              ))}
             </TextField>
 
             <TextField
@@ -292,177 +286,199 @@ export default function CourseResults() {
               select
               size="small"
               variant="filled"
-              value={filters.duration}
-              onChange={(e) =>
-                setFilters({ ...filters, duration: e.target.value })
-              }
+              value={filters.duration || ""}
+              onChange={(e) => updateFilterEverywhere({ duration: e.target.value || "" })}
               sx={{ background: "white", borderRadius: "6px" }}
               SelectProps={{ MenuProps: menuProps }}
             >
               <MenuItem value="">Any</MenuItem>
-              <MenuItem value="1 Year">1 Year</MenuItem>
-              <MenuItem value="2 Years">2 Years</MenuItem>
-              <MenuItem value="3 Years">3 Years</MenuItem>
+              {durations.map((d) => (
+                <MenuItem key={d} value={d}>
+                  {d}
+                </MenuItem>
+              ))}
             </TextField>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "0.7rem",
-              marginTop: "0.6rem",
-            }}
-          >
-            <Button
-              variant="contained"
-              onClick={applyFilter}
-              sx={{
-                background: "white",
-                color: "#4e6dfb",
-                fontWeight: 600,
-                minWidth: "96px",
-                paddingInline: "1.2rem",
-                textTransform: "none",
-                "&:hover": { background: "#eef1ff" },
-              }}
-            >
-              Apply
-            </Button>
-
-            <Button
-              variant="outlined"
-              onClick={onSubscribe}
-              sx={{
-                borderColor: "white",
-                color: "white",
-                fontWeight: 600,
-                minWidth: "120px",
-                paddingInline: "1.2rem",
-                textTransform: "none",
-                "&:hover": {
-                  borderColor: "white",
-                  background: "rgba(255,255,255,0.15)",
-                },
-              }}
-            >
-              Subscribe
-            </Button>
           </div>
         </div>
       </div>
 
-      <div
-        style={{
-          maxWidth: "1200px",
-          margin: "0 auto",
-          paddingTop: HEADER_HEIGHT + FILTER_HEIGHT,
-          paddingBottom: "3rem",
-        }}
-      >
-        {results.map((course) => {
-          const uni = universities.find((u) => u.id === course.universityId);
-          const field = fields.find((f) => f.id === course.fieldId);
-          const spec = specializations.find(
-            (s) => s.id === course.specializationId
-          );
-
-          return (
+      <div style={{ paddingTop: topPadding, paddingBottom: "4rem" }}>
+        <div
+          style={{
+            maxWidth: "1400px",
+            margin: "0 auto",
+            display: courses.length > 0 ? "grid" : "block",
+            gridTemplateColumns:
+              courses.length > 0 ? "repeat(auto-fit, minmax(600px, 1fr))" : "none",
+            gap: "1.5rem",
+          }}
+        >
+          {courses.length === 0 && !loading && (
             <div
-              key={course.id}
               style={{
-                background: "#ffffff",
+                textAlign: "center",
+                marginTop: "3rem",
+                fontSize: "1.15rem",
+                color: "#333",
+                fontWeight: 500,
+              }}
+            >
+              No matching programs found
+              <div style={{ marginTop: "0.5rem" }}>
+                <Button
+                  variant="contained"
+                  onClick={() =>
+                    subscribeApi(
+                      cleanNull({
+                        userEmail: user?.email,
+                        universityId: filters.universityId,
+                        fieldId: filters.fieldId,
+                        specializationId: filters.specializationId,
+                        level: filters.level,
+                        duration: filters.duration,
+                      })
+                    )
+                  }
+                  sx={{ fontWeight: 600 }}
+                >
+                  Subscribe for updates
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {courses.map((c) => (
+            <div
+              key={c.id}
+              style={{
+                background: "#fff",
                 borderRadius: "16px",
-                padding: "1.4rem 1.6rem",
-                marginBottom: "1rem",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                boxShadow: "0 8px 18px rgba(15,23,42,0.06)",
+                padding: "1.8rem 2rem",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
                 border: "1px solid #e5e7eb",
               }}
             >
-              <div style={{ maxWidth: "70%" }}>
-                <div
-                  style={{
-                    fontSize: "1.2rem",
-                    fontWeight: 700,
-                    marginBottom: "0.4rem",
-                    color: colors.textDark,
-                  }}
-                >
-                  {course.name}
+              <div
+                style={{
+                  fontSize: "1.3rem",
+                  fontWeight: 700,
+                  marginBottom: "0.4rem",
+                }}
+              >
+                {c.name}
+              </div>
+              <div style={{ fontSize: "0.95rem", color: "#444" }}>
+                <div>
+                  <strong>University:</strong> {c.university}
                 </div>
-                <div style={{ fontSize: "0.95rem", color: "#4b5563" }}>
-                  <div>
-                    <strong>University:</strong> {uni?.name}
-                  </div>
-                  <div>
-                    <strong>Field:</strong> {field?.name}
-                  </div>
-                  <div>
-                    <strong>Specialization:</strong> {spec?.name}
-                  </div>
+                <div>
+                  <strong>Field:</strong> {c.field}
+                </div>
+                <div>
+                  <strong>Specialization:</strong> {c.specialization}
                 </div>
               </div>
 
               <div
                 style={{
                   display: "flex",
-                  flexDirection: "column",
-                  alignItems: "flex-end",
-                  gap: "0.5rem",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: "1rem",
                 }}
               >
                 <div style={{ display: "flex", gap: "0.4rem" }}>
                   <span
                     style={{
-                      padding: "0.15rem 0.55rem",
+                      padding: "0.25rem 0.65rem",
                       borderRadius: "999px",
                       background: "#eef2ff",
                       color: "#4338ca",
-                      fontSize: "0.8rem",
+                      fontSize: "0.85rem",
                       fontWeight: 600,
                     }}
                   >
-                    {course.level}
+                    {c.level}
                   </span>
                   <span
                     style={{
-                      padding: "0.15rem 0.55rem",
+                      padding: "0.25rem 0.65rem",
                       borderRadius: "999px",
                       background: "#ecfeff",
                       color: "#0f766e",
-                      fontSize: "0.8rem",
+                      fontSize: "0.85rem",
                       fontWeight: 600,
                     }}
                   >
-                    {course.duration}
+                    {c.duration}
                   </span>
                 </div>
 
-                <Button
-                  size="small"
-                  variant="contained"
-                  sx={{
-                    marginTop: "0.2rem",
-                    background: colors.primary,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    fontSize: "0.85rem",
-                    "&:hover": { background: "#1d4ed8" },
-                  }}
-                >
-                  View details
-                </Button>
+                <div style={{ display: "flex", gap: "0.5rem" }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() =>
+                      subscribeApi(
+                        cleanNull({
+                          userEmail: user?.email,
+                          universityId: c.universityId,
+                          fieldId: c.fieldId,
+                          specializationId: c.specializationId,
+                          level: c.level,
+                          duration: c.duration,
+                        })
+                      )
+                    }
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 600,
+                      borderColor: colors.primary,
+                      color: colors.primary,
+                      "&:hover": { borderColor: "#1d4ed8", color: "#1d4ed8" },
+                    }}
+                  >
+                    Subscribe
+                  </Button>
+
+                  <Button
+                    size="small"
+                    variant="contained"
+                    onClick={() => navigate(`/course/${c.id}`)}
+                    sx={{
+                      background: colors.primary,
+                      textTransform: "none",
+                      fontWeight: 600,
+                      "&:hover": { background: "#1d4ed8" },
+                    }}
+                  >
+                    View details
+                  </Button>
+                </div>
               </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
 
-        {results.length === 0 && (
-          <p style={{ fontStyle: "italic", marginTop: "1rem" }}>
-            No matching programs found.
-          </p>
+        {courses.length > 0 && data?.pages > page && (
+          <div style={{ textAlign: "center", marginTop: "2rem" }}>
+            <Button
+              variant="contained"
+              disabled={loading}
+              onClick={() => {
+                const next = page + 1;
+                setPage(next);
+                fetchCourses(filters, next);
+              }}
+              sx={{ textTransform: "none", padding: "0.5rem 1.5rem", fontWeight: 600 }}
+            >
+              {loading ? (
+                <CircularProgress size={20} sx={{ color: "white" }} />
+              ) : (
+                "Load More"
+              )}
+            </Button>
+          </div>
         )}
       </div>
     </AppLayout>
