@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast';
 import useAuthCheck from './pages/hooks/useAuthCheck';
 import RedirectIfLoggedIn from "./components/RedirectLoggedIn";
 import CourseResults from "./pages/course-result/CourseResult"
+import ManageCourses from './pages/manage-courses/ManageCourses';
 
 function App() {
   useAuthCheck();
@@ -57,6 +58,13 @@ function App() {
             <RedirectIfLoggedIn>
               <Signup />
             </RedirectIfLoggedIn>
+          }
+        />
+
+        <Route
+          path="/manage-courses"
+          element={
+              <ManageCourses />
           }
         />
 

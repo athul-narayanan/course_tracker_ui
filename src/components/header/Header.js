@@ -11,7 +11,11 @@ import { useNavigate } from "react-router-dom";
 export default function Header() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { token } = useSelector((state) => state.auth);
+
+  const { token, user } = useSelector((state) => state.auth);
+  const role = user?.role;
+  const isAdmin = role === "Admin";
+
   const notifications = useSelector((state) => state.notifications?.items || []);
 
   const handleLogout = () => {
@@ -36,12 +40,14 @@ export default function Header() {
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        flexWrap: "wrap",
+        rowGap: "0.4rem",
         boxSizing: "border-box",
         borderBottom: "1px solid rgba(0,0,0,0.08)",
         position: "fixed",
         top: 0,
         left: 0,
-        zIndex: 2000
+        zIndex: 2000,
       }}
     >
       <div
@@ -49,7 +55,8 @@ export default function Header() {
           display: "flex",
           alignItems: "center",
           gap: "0.6rem",
-          cursor: "pointer"
+          cursor: "pointer",
+          flexShrink: 0,
         }}
         onClick={() => navigate("/")}
       >
@@ -65,16 +72,50 @@ export default function Header() {
             fontSize: "1.1rem",
             fontWeight: 700,
             whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            color: colors.textDark
+            color: colors.textDark,
           }}
         >
           Course Tracker
         </h3>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+      {isAdmin && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "1.2rem",
+            fontSize: "0.95rem",
+            fontWeight: 600,
+            flexWrap: "wrap",
+            maxWidth: "100%",
+          }}
+        >
+          <span
+            onClick={() => navigate("/")}
+            style={{
+              cursor: "pointer",
+              color: colors.primary,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Search Courses
+          </span>
+
+          <span
+            onClick={() => navigate("/manage-courses")}
+            style={{
+              cursor: "pointer",
+              color: colors.primary,
+              whiteSpace: "nowrap",
+            }}
+          >
+            Manage Courses
+          </span>
+        </div>
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexShrink: 0 }}>
         {token ? (
           <>
             <Badge badgeContent={notifications.length} color="error">
@@ -96,7 +137,7 @@ export default function Header() {
                 borderRadius: "8px",
                 cursor: "pointer",
                 fontSize: "0.85rem",
-                fontWeight: 600
+                fontWeight: 600,
               }}
             >
               <LogoutIcon style={{ fontSize: 18 }} />
@@ -116,7 +157,7 @@ export default function Header() {
               color: colors.primary,
               cursor: "pointer",
               fontSize: "0.9rem",
-              fontWeight: 600
+              fontWeight: 600,
             }}
           >
             <LoginIcon style={{ fontSize: 18 }} />

@@ -17,7 +17,7 @@ export default function useAuthCheck() {
       dispatch(
         setAuth({
           token: "cookies",
-          user: data?.data
+          user: data?.user
         })
       );
     }
