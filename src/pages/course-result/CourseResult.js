@@ -444,7 +444,7 @@ export default function CourseResults() {
                   <Button
                     size="small"
                     variant="contained"
-                    onClick={() => navigate(`/course/${c.id}`)}
+                    onClick={() => window.open(c.courseLink, "_blank")}
                     sx={{
                       background: colors.primary,
                       textTransform: "none",

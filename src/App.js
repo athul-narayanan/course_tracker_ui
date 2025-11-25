@@ -8,6 +8,7 @@ import useAuthCheck from './pages/hooks/useAuthCheck';
 import RedirectIfLoggedIn from "./components/RedirectLoggedIn";
 import CourseResults from "./pages/course-result/CourseResult"
 import ManageCourses from './pages/manage-courses/ManageCourses';
+import Notifications from './pages/notifications/Notifications';
 
 function App() {
   useAuthCheck();
@@ -70,6 +71,8 @@ function App() {
 
         <Route path="/" element={<CourseSearch />} />
         <Route path="/courses" element={<CourseResults />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="*" element={<div>404 Not Found</div>} />
       </Routes>
     </>
   );

@@ -1,23 +1,27 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, use } from "react";
 import { TextField, MenuItem, Button, Paper } from "@mui/material";
 import AppLayout from "../../components/Layout";
 import { useSelector, useDispatch } from "react-redux";
 import { setUniversities, setFields, setSpecializations } from "../../store/auth/lookupsSlice";
 import { colors } from "../../theme/colors";
 import useFetch from "../hooks/useFetch";
+import toast from "react-hot-toast";
 
 export default function ManageCourses() {
   const dispatch = useDispatch();
   const lookups = useSelector((state) => state.lookups);
 
+  const [fileToUpload, setFileToUpload] = useState(null);
+
   const { data: uniData, fetchData: loadUniversities } = useFetch("/universities", "GET");
   const { data: fieldData, fetchData: loadFields } = useFetch("/fields", "GET");
   const { data: specData, fetchData: loadSpecializations } = useFetch("/specializations", "GET");
 
-  const { fetchData: addCourse } = useFetch("/universities/add", "POST", false);
-  const { fetchData: uploadFile } = useFetch("/universities/upload", "POST", false);
+  const { fetchData: addCourse, data: addedCourse, error: addCourseError } = useFetch("/universities/add", "POST", false);
+  const { fetchData: uploadFile, data: uploadFileData, error: uploadFileError } = useFetch("/universities/upload", "POST", false);
 
   const [activeTab, setActiveTab] = useState("add");
+
   const [form, setForm] = useState({
     name: "",
     universityId: null,
@@ -25,6 +29,11 @@ export default function ManageCourses() {
     specializationId: null,
     level: null,
     duration: null,
+    courseLink: "",
+  });
+
+  const [validation, setValidation] = useState({
+    linkError: "",
   });
 
   const levels = ["Bachelors", "Masters", "PG Diploma"];
@@ -34,6 +43,28 @@ export default function ManageCourses() {
     if (!lookups.universities.length) loadUniversities();
     if (!lookups.fields.length) loadFields();
   }, []);
+
+  useEffect(() => {
+    if (addedCourse && !addCourseError) {
+      toast.success("Course added successfully");
+      setForm({
+        name: "",
+        universityId: null,
+        fieldId: null,
+        specializationId: null,
+        level: null,
+        duration: null,
+        courseLink: "",
+      });
+    }
+  }, [addedCourse, addCourseError]);
+
+  useEffect(() => { 
+    if (uploadFileData && !uploadFileError) {
+      toast.success("File uploaded successfully");
+      setFileToUpload(null);
+    }
+  }, [uploadFileData, uploadFileError]);
 
   useEffect(() => {
     if (uniData?.data) dispatch(setUniversities(uniData.data));
@@ -58,21 +89,47 @@ export default function ManageCourses() {
     }
   }, [specData, form.fieldId]);
 
-  const visibleSpecializations = form.fieldId
-    ? lookups.specializations?.[form.fieldId] || []
-    : [];
+  const visibleSpecializations = form.fieldId ? lookups.specializations?.[form.fieldId] || [] : [];
+
+  const validateLink = (value) => {
+    if (!value.startsWith("http://") && !value.startsWith("https://")) {
+      setValidation({ ...validation, linkError: "Valid link must start with http:// or https://" });
+    } else {
+      setValidation({ ...validation, linkError: "" });
+    }
+  };
 
   const handleInput = (key, value) => {
-    setForm({
-      ...form,
-      [key]: value === "" ? null : isNaN(value) ? value : Number(value),
+    const cleanVal =
+      value === "" ? "" : isNaN(value) || ["courseLink", "name"].includes(key) ? value : Number(value);
+
+    setForm((prev) => {
+      const updated = { ...prev, [key]: cleanVal };
+
+      if (key === "fieldId") updated.specializationId = null;
+
+      if (key === "courseLink") validateLink(cleanVal);
+
+      return updated;
     });
   };
 
+  const isDisabled =
+    !form.name ||
+    !form.universityId ||
+    !form.fieldId ||
+    !form.specializationId ||
+    !form.level ||
+    !form.duration ||
+    !form.courseLink ||
+    validation.linkError !== "";
+
   const handleAddCourse = () => {
-    if (!form.name) return alert("Course name required");
+    if (isDisabled) {
+      toast.error(validation.linkError || "All fields are mandatory");
+      return;
+    }
     addCourse(form);
-    alert("Course added");
   };
 
   const handleFileUpload = (event) => {
@@ -81,7 +138,7 @@ export default function ManageCourses() {
     const body = new FormData();
     body.append("file", file);
     uploadFile(body);
-    alert("Upload started");
+    toast.success("Upload started");
   };
 
   return (
@@ -117,6 +174,16 @@ export default function ManageCourses() {
               value={form.name}
               onChange={(e) => handleInput("name", e.target.value)}
               sx={{ marginBottom: "1rem" }}
+            />
+
+            <TextField
+              label="Course Link"
+              fullWidth
+              value={form.courseLink}
+              onChange={(e) => handleInput("courseLink", e.target.value)}
+              sx={{ marginBottom: "1rem" }}
+              error={!!validation.linkError}
+              helperText={validation.linkError}
             />
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: "1rem" }}>
@@ -194,6 +261,7 @@ export default function ManageCourses() {
             <Button
               variant="contained"
               fullWidth
+              disabled={isDisabled}
               sx={{ marginTop: "1.5rem", fontWeight: 600 }}
               onClick={handleAddCourse}
             >
@@ -205,12 +273,42 @@ export default function ManageCourses() {
         {activeTab === "upload" && (
           <Paper elevation={2} style={{ padding: "1.5rem", borderRadius: 12 }}>
             <p style={{ marginBottom: 10, fontWeight: 500 }}>Upload .xlsx, .xls or .csv file</p>
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} />
+
+            <input
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setFileToUpload(file);
+                toast.success("File selected. Click Upload to proceed.");
+              }}
+            />
+
+            <Button
+              variant="contained"
+              sx={{ marginTop: "1rem", fontWeight: 600 }}
+              onClick={() => {
+                if (!fileToUpload) {
+                  toast.error("No file selected");
+                  return;
+                }
+
+                const body = new FormData();
+                body.append("file", fileToUpload);
+                uploadFile(body);
+                toast.success("Upload started");
+              }}
+            >
+              Upload File
+            </Button>
+
             <p style={{ opacity: 0.6, fontSize: "0.85rem" }}>
               Insert course details in matching template.
             </p>
           </Paper>
         )}
+
       </div>
     </AppLayout>
   );

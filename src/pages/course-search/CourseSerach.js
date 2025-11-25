@@ -60,7 +60,6 @@ export default function CourseSearch() {
 
   const updateFilters = (updated) => dispatch(setFilters({ ...filters, ...updated }));
   const onSearch = () => navigate("/courses", { state: { filters } });
-  const onSubscribe = () => navigate("/courses", { state: { filters, subscribe: true } });
 
   return (
     <AppLayout>
@@ -213,10 +212,6 @@ export default function CourseSearch() {
             onClick={onSearch}
           >
             Search
-          </Button>
-
-          <Button variant="outlined" onClick={onSubscribe}>
-            Subscribe
           </Button>
         </div>
       </div>
